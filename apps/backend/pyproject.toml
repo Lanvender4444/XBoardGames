@@ -1,0 +1,59 @@
+[project]
+name = "ai-tabletop-backend"
+version = "0.0.1"
+description = "AI Tabletop Platform backend — engine, rules pipeline, AI agents, memory, multiplayer."
+readme = "README.md"
+requires-python = ">=3.10"
+
+# Phase 0/1 只需极少运行时依赖（引擎是纯逻辑，可单测、不依赖网络/LLM）。
+# 后续 Phase 的重依赖放进 optional-dependencies，按需安装，保持核心轻量。
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Phase 0 完整地基：关系存储 + 迁移
+storage = [
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+]
+# Phase 3 后端服务 + 联机
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "redis>=5.0",
+    "websockets>=12.0",
+]
+server = [
+    "pymysql>=1.1",          # MySQL 驱动（server profile）
+]
+# Phase 2 AI 玩家 + 记忆
+ai = [
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+]
+vector = [
+    "faiss-cpu>=1.8",        # local profile 向量库；server 可换 pgvector
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+autoplay = "app.cli.autoplay:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

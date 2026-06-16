@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# uv
+.uv/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# Tauri / Rust
+target/
+
+# Local data (NEVER commit user-writable runtime data)
+*.sqlite
+*.sqlite3
+*.db
+dump.rdb
+/data/
+
+# Env
+.env
+.env.local
