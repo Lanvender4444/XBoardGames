@@ -135,6 +135,7 @@ class GameState:
     seq: int = 0
     finished: bool = False
     winner: Optional[WinResult] = None
+    seed: Optional[int] = None  # 本局随机种子（用于结算平票等确定性随机）
     # 能力剩余次数： (seat_id, primitive) -> remaining
     ability_uses: dict[tuple[int, str], int] = field(default_factory=dict)
     # 本阶段已行动的席位

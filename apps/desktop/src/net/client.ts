@@ -2,8 +2,17 @@
 import type { Envelope } from "../../../../packages/protocol/src/messages";
 
 export class GameSocket {
-  constructor(private url: string) {}
-  connect(): void {/* TODO Phase 3 */}
-  send<P>(_msg: Envelope<P>): void {/* TODO */}
-  onMessage(_cb: (msg: Envelope) => void): void {/* TODO */}
+  readonly url: string;
+  constructor(url: string) {
+    this.url = url;
+  }
+  connect(): void {
+    /* TODO Phase 3: new WebSocket(this.url) */
+  }
+  send<P>(_msg: Envelope<P>): void {
+    /* TODO Phase 3 */
+  }
+  onMessage(_cb: (msg: Envelope) => void): void {
+    /* TODO Phase 3 */
+  }
 }

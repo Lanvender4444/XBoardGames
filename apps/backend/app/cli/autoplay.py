@@ -15,7 +15,10 @@ import argparse
 import sys
 from typing import Optional
 
-from app.agents.decision_graph import RandomPolicy
+from app.agents.decision_graph import HeuristicPolicy, RandomPolicy
+from app.agents.langgraph_graph import LangGraphPolicy
+from app.agents.llm import LLMPolicy
+from app.agents.orchestrator import run_orchestrator
 from app.engine import Action, Event, GameEngine, GameState, Seat, Visibility
 from app.engine.engine import PASS
 from app.rules.compiler import load_builtin
@@ -27,6 +30,7 @@ def run_game(
     seed: int = 0,
     max_rounds: int = 50,
     on_event: Optional[callable] = None,
+    policy_kind: str = "random",
 ) -> GameState:
     """跑通一整局，返回终局状态。``on_event`` 可选地接收每条新事件用于打印。"""
     definition = load_builtin(slug)
@@ -34,24 +38,19 @@ def run_game(
     # 全 AI 局；actor_type 不影响引擎逻辑，只标注来源
     seats = [Seat(seat_id=i, actor_type="ai") for i in range(players)]
     state = engine.init_session(definition, seats, seed=seed)
-    policy = RandomPolicy(seed=seed)
+    # 每个席位一个策略实例；heuristic 策略持有跨回合心证（见 app.agents 决策子图）
+    if policy_kind == "heuristic":
+        policies = {s.seat_id: HeuristicPolicy(seed=seed + s.seat_id) for s in seats}
+    elif policy_kind == "langgraph":
+        policies = {s.seat_id: LangGraphPolicy(seed=seed + s.seat_id) for s in seats}
+    elif policy_kind == "llm":
+        policies = {s.seat_id: LLMPolicy(seed=seed + s.seat_id) for s in seats}
+    else:
+        policies = {s.seat_id: RandomPolicy(seed=seed + s.seat_id) for s in seats}
 
     _flush(state, 0, on_event)
-    safety = 0
-    while not state.finished and state.round <= max_rounds:
-        safety += 1
-        if safety > max_rounds * 20:
-            raise RuntimeError("对局未收敛（疑似规则/引擎死循环）")
-        before = len(state.log)
-        # 收集当前阶段所有待行动席位的行动
-        for seat in engine.actors_to_act(state):
-            action = policy.decide(engine, state, seat)
-            if action is None:
-                action = Action(seat=seat.seat_id, type=PASS)
-            engine.apply(state, action)
-        # 阶段结算 + 转移
-        engine.advance_phase(state)
-        _flush(state, before, on_event)
+    # 全 AI 对局由 LangGraph 编排器驱动：抢占式阶段并发思考(Send)+顺序仲裁，排队式阶段轮流发言。
+    run_orchestrator(engine, state, policies, on_event=on_event, max_steps=max_rounds * 6)
     return state
 
 
@@ -81,14 +80,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--players", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quiet", action="store_true", help="只打印结果，不逐条打印事件")
+    parser.add_argument("--policy", choices=["random", "heuristic", "langgraph", "llm"], default="random",
+                        help="AI 策略：random=随机；heuristic=纯Python子图；langgraph=LangGraph子图；llm=LangGraph+LLM决策链(langchain，默认离线模型)")
     args = parser.parse_args(argv)
 
-    print(f"== {args.game} | players={args.players} | seed={args.seed} ==")
+    print(f"== {args.game} | players={args.players} | seed={args.seed} | policy={args.policy} ==")
     state = run_game(
         args.game,
         args.players,
         seed=args.seed,
         on_event=None if args.quiet else _print_event,
+        policy_kind=args.policy,
     )
 
     print("-- 角色公开 --")

@@ -5,10 +5,13 @@ description = "AI Tabletop Platform backend — engine, rules pipeline, AI agent
 readme = "README.md"
 requires-python = ">=3.10"
 
-# Phase 0/1 只需极少运行时依赖（引擎是纯逻辑，可单测、不依赖网络/LLM）。
-# 后续 Phase 的重依赖放进 optional-dependencies，按需安装，保持核心轻量。
+# 引擎是纯逻辑（仅 pyyaml）；但本平台核心是"AI 操控 AI 角色"，AI 决策走 LangGraph 子图 +
+# langchain 决策链，故 langchain-core 与 langgraph 为**核心依赖**。真实 LLM provider（langchain-openai
+# / langchain-anthropic）才放进可选 `ai` extra——默认用内置离线 ChatModel，无 API key 也能整局运行。
 dependencies = [
     "pyyaml>=6.0",
+    "langchain-core>=0.3",
+    "langgraph>=0.2",
 ]
 
 [project.optional-dependencies]
@@ -27,10 +30,11 @@ api = [
 server = [
     "pymysql>=1.1",          # MySQL 驱动（server profile）
 ]
-# Phase 2 AI 玩家 + 记忆
+# 真实 LLM provider（可选）：设 provider+key 即用真模型对局；不装则用内置离线 ChatModel。
+# langchain-core / langgraph 已在核心依赖。
 ai = [
-    "langgraph>=0.2",
-    "langchain-core>=0.3",
+    "langchain-openai>=0.2",     # OpenAI 兼容（覆盖主流开/闭源 + 本地 Ollama/LM Studio/vLLM）
+    "langchain-anthropic>=0.2",  # Anthropic Claude 原生（可选）
 ]
 vector = [
     "faiss-cpu>=1.8",        # local profile 向量库；server 可换 pgvector

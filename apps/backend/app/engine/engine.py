@@ -79,6 +79,7 @@ class GameEngine:
             seats=seats,
             phase=definition.start_phase,
             round=1,
+            seed=seed,
         )
         # 初始化能力剩余次数
         for s in seats:
@@ -339,7 +340,10 @@ class GameEngine:
         if group_targets:
             tally = Counter(group_targets)
             top = max(tally.values())
-            victims.add(sorted(t for t, c in tally.items() if c == top)[0])
+            leaders = sorted(t for t, c in tally.items() if c == top)
+            # 平票不再固定取最小席位（否则人类#0 几乎每晚被刀）；用本局种子做确定性随机
+            rng = random.Random((state.seed or 0, "night_kill", state.round, len(state.log)))
+            victims.add(rng.choice(leaders))
         return victims
 
     def _resolve_vote(self, state: GameState, phase: PhaseDef) -> None:
