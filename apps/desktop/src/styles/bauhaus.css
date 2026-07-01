@@ -1,0 +1,236 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   包豪斯设计系统 (Bauhaus design tokens)
+   原则：三原色 + 黑 + 纸白；几何无衬线；强网格；粗黑线；功能至上、装饰即结构。
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* 三原色 + 黑白 —— 包豪斯调色板 */
+  --bh-red: #e2231a;
+  --bh-blue: #1356a2;
+  --bh-yellow: #f7c200;
+  --bh-black: #141414;
+  --bh-paper: #f3efe6;
+  --bh-paper-2: #e7e1d4;
+  --bh-white: #ffffff;
+
+  /* 网格与线条 */
+  --bh-rule: 4px;          /* 标准粗线 */
+  --bh-rule-thick: 8px;    /* 强调粗线 */
+  --bh-gap: 24px;
+  --bh-radius: 0px;        /* 包豪斯几乎不用圆角 */
+
+  /* 字体：几何无衬线，近似 Futura */
+  --bh-font: "Futura", "Century Gothic", "Twentieth Century",
+    "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+
+  --bh-shadow: 8px 8px 0 var(--bh-black);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  font-family: var(--bh-font);
+  background-color: var(--bh-paper);
+  /* 极淡的网格底纹，呼应包豪斯的构成主义网格 */
+  background-image:
+    linear-gradient(to right, rgba(20, 20, 20, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 20, 20, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--bh-black);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 排版 ── */
+h1, h2, h3, h4 {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 800;
+  line-height: 0.98;
+}
+h1 { font-size: 3rem; }
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.15rem; letter-spacing: 0.12em; }
+p { line-height: 1.5; }
+
+.bh-mono-label {
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* 竖排标签（包豪斯海报常见） */
+.bh-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-weight: 800;
+}
+
+/* ── 几何形状基元 ── */
+.bh-shape { display: inline-block; }
+.bh-circle { border-radius: 50%; }
+.bh-square { border-radius: 0; }
+.bh-triangle {
+  width: 0; height: 0;
+  background: transparent !important;
+  border-left: var(--w, 32px) solid transparent;
+  border-right: var(--w, 32px) solid transparent;
+  border-bottom: var(--h, 56px) solid var(--c, var(--bh-black));
+}
+.bh-half-circle {
+  border-radius: 999px 999px 0 0;
+}
+
+/* ── 面板 / 卡片 ── */
+.bh-panel {
+  background: var(--bh-white);
+  border: var(--bh-rule) solid var(--bh-black);
+  box-shadow: var(--bh-shadow);
+}
+.bh-panel--flat { box-shadow: none; }
+
+/* ── 按钮 ── */
+.bh-btn {
+  font-family: var(--bh-font);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+  font-size: 0.9rem;
+  padding: 14px 22px;
+  border: var(--bh-rule) solid var(--bh-black);
+  background: var(--bh-yellow);
+  color: var(--bh-black);
+  cursor: pointer;
+  box-shadow: 5px 5px 0 var(--bh-black);
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.bh-btn:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--bh-black); }
+.bh-btn:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--bh-black); }
+.bh-btn--red { background: var(--bh-red); color: var(--bh-white); }
+.bh-btn--blue { background: var(--bh-blue); color: var(--bh-white); }
+.bh-btn--ghost { background: var(--bh-white); }
+.bh-btn[disabled] { opacity: 0.35; cursor: not-allowed; box-shadow: none; transform: none; }
+
+/* ── 色块工具类 ── */
+.bg-red { background: var(--bh-red); }
+.bg-blue { background: var(--bh-blue); }
+.bg-yellow { background: var(--bh-yellow); }
+.bg-black { background: var(--bh-black); }
+.bg-paper { background: var(--bh-paper); }
+.fg-white { color: var(--bh-white); }
+
+/* ── 应用外壳布局 ── */
+.bh-app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* 左侧导航条 */
+.bh-rail {
+  background: var(--bh-black);
+  border-right: var(--bh-rule-thick) solid var(--bh-black);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  gap: 18px;
+}
+.bh-rail__mark {
+  width: 48px; height: 48px;
+  display: grid; place-items: center;
+  margin-bottom: 12px;
+}
+.bh-nav-btn {
+  width: 64px; height: 64px;
+  border: 3px solid var(--bh-black);
+  display: grid; place-items: center;
+  cursor: pointer;
+  background: var(--bh-white);
+  position: relative;
+}
+.bh-nav-btn[data-active="true"] { outline: 4px solid var(--bh-yellow); outline-offset: 2px; }
+.bh-nav-btn__label {
+  position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
+  font-size: 0.55rem; letter-spacing: 0.15em; color: var(--bh-white);
+  text-transform: uppercase; font-weight: 700; white-space: nowrap;
+}
+
+/* 主区域 */
+.bh-main {
+  overflow: auto;
+  padding: var(--bh-gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bh-gap);
+}
+
+/* 顶部标题栏：典型包豪斯——红/蓝/黄三段色块 + 黑标题 */
+.bh-masthead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+  border: var(--bh-rule) solid var(--bh-black);
+  background: var(--bh-white);
+  box-shadow: var(--bh-shadow);
+}
+.bh-masthead__bars { display: flex; }
+.bh-masthead__bar { width: 28px; }
+.bh-masthead__title { padding: 18px 24px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.bh-masthead__badge {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 24px; background: var(--bh-black); color: var(--bh-white);
+}
+
+/* 通用区段标题 */
+.bh-section-head { display: flex; align-items: center; gap: 14px; }
+.bh-section-head .dot { width: 20px; height: 20px; }
+
+/* 网格容器 */
+.bh-grid { display: grid; gap: var(--bh-gap); }
+.bh-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.bh-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.bh-grid--4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 1100px) {
+  .bh-grid--4 { grid-template-columns: repeat(2, 1fr); }
+  .bh-grid--3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* 列表行 */
+.bh-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 16px; border-bottom: 3px solid var(--bh-black);
+}
+.bh-row:last-child { border-bottom: none; }
+
+/* 数字徽标 */
+.bh-num {
+  width: 40px; height: 40px; flex: 0 0 40px;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 1.1rem;
+  border: 3px solid var(--bh-black);
+}
+
+/* 标签/筹码 */
+.bh-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border: 3px solid var(--bh-black);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 0.7rem; font-weight: 800;
+}
+
+/* 装饰角标 */
+.bh-corner { position: relative; }
+.bh-corner::after {
+  content: ""; position: absolute; top: -2px; right: -2px;
+  width: 0; height: 0;
+  border-top: 26px solid var(--bh-red);
+  border-left: 26px solid transparent;
+}

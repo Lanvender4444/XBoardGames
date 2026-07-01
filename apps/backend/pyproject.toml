@@ -1,0 +1,64 @@
+[project]
+name = "ai-tabletop-backend"
+version = "0.0.1"
+description = "AI Tabletop Platform backend — engine, rules pipeline, AI agents, memory, multiplayer."
+readme = "README.md"
+requires-python = ">=3.10"
+
+# 引擎是纯逻辑（仅 pyyaml）；但本平台核心是"AI 操控 AI 角色"，AI 决策走 LangGraph 子图 +
+# langchain 决策链，故 langchain-core 与 langgraph 为**核心依赖**。真实 LLM provider（langchain-openai
+# / langchain-anthropic）才放进可选 `ai` extra——默认用内置离线 ChatModel，无 API key 也能整局运行。
+dependencies = [
+    "pyyaml>=6.0",
+    "langchain-core>=0.3",
+    "langgraph>=0.2",
+]
+
+[project.optional-dependencies]
+# Phase 0 完整地基：关系存储 + 迁移
+storage = [
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+]
+# Phase 3 后端服务 + 联机
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "redis>=5.0",
+    "websockets>=12.0",
+]
+server = [
+    "pymysql>=1.1",          # MySQL 驱动（server profile）
+]
+# 真实 LLM provider（可选）：设 provider+key 即用真模型对局；不装则用内置离线 ChatModel。
+# langchain-core / langgraph 已在核心依赖。
+ai = [
+    "langchain-openai>=0.2",     # OpenAI 兼容（覆盖主流开/闭源 + 本地 Ollama/LM Studio/vLLM）
+    "langchain-anthropic>=0.2",  # Anthropic Claude 原生（可选）
+]
+vector = [
+    "faiss-cpu>=1.8",        # local profile 向量库；server 可换 pgvector
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+autoplay = "app.cli.autoplay:main"
+serve = "app.api.serve:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

@@ -1,0 +1,8 @@
+{
+  "name": "@ai-tabletop/protocol",
+  "version": "0.0.1",
+  "description": "Shared WS/HTTP protocol schema for the AI Tabletop Platform",
+  "type": "module",
+  "main": "src/messages.ts",
+  "private": true
+}
