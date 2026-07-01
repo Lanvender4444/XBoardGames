@@ -46,6 +46,7 @@ dev = [
 
 [project.scripts]
 autoplay = "app.cli.autoplay:main"
+serve = "app.api.serve:main"
 
 [build-system]
 requires = ["hatchling"]

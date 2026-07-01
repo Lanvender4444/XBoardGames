@@ -10,10 +10,15 @@ export function setBackendUrl(u: string): void {
 }
 
 async function call<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(backendUrl() + path, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
+  let res: Response;
+  try {
+    res = await fetch(backendUrl() + path, {
+      headers: { "Content-Type": "application/json" },
+      ...opts,
+    });
+  } catch {
+    throw new Error(`无法连接后端 ${backendUrl()} —— 后端是否已启动？（cd apps/backend && uv run uvicorn "app.api.app:create_app" --factory --port 8000），或“设置”里的后端地址是否正确？`);
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -85,6 +90,8 @@ export interface GameView {
   awaiting: number[];
   seats: SeatVM[];
   log: EventVM[];
+  personas?: Record<string, { name: string; traits: string[]; style: string }>;
+  thoughts?: Record<string, any>;
 }
 
 export const api = {
@@ -92,9 +99,12 @@ export const api = {
   providers: () => call<{ providers: Provider[] }>("/providers"),
   getLLM: () => call<LLMConfig>("/llm/config"),
   setLLM: (cfg: LLMConfig) => call<LLMConfig>("/llm/config", { method: "POST", body: JSON.stringify(cfg) }),
-  createGame: (body: { slug: string; players: number; human_seats: number[]; seed?: number | null }) =>
+  testLLM: (cfg: LLMConfig) => call<{ ok: boolean; error?: string; hint?: string; sample?: string; note?: string; model_class?: string }>(
+    "/llm/test", { method: "POST", body: JSON.stringify(cfg) }),
+  createGame: (body: { slug: string; players: number; human_seats: number[]; seed?: number | null; stream?: boolean }) =>
     call<GameView>("/games", { method: "POST", body: JSON.stringify(body) }),
+  streamUrl: (gid: string) => backendUrl() + `/games/${gid}/stream`,
   view: (gid: string, seat: number) => call<GameView>(`/games/${gid}?seat=${seat}`),
-  act: (gid: string, action: { seat: number; type: string; targets: number[]; extra?: Record<string, unknown> }) =>
+  act: (gid: string, action: { seat: number; type: string; targets: number[]; extra?: Record<string, unknown>; stream?: boolean }) =>
     call<GameView>(`/games/${gid}/action`, { method: "POST", body: JSON.stringify(action) }),
 };

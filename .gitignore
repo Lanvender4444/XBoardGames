@@ -27,3 +27,5 @@ dump.rdb
 # Env
 .env
 .env.local
+
+/.review

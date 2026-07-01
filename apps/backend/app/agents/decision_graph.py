@@ -59,6 +59,21 @@ class GraphContext:
     wolf_mates: set = field(default_factory=set)
     bias: dict = field(default_factory=dict)
     chosen: Optional[Action] = None
+    # 人设 + 三级记忆 + 思维轨迹（调试可见）
+    persona: object = None
+    session_id: int = 0
+    character_id: int = 0
+    ltm_store: object = None
+    mtm: str = ""                      # 中期记忆：本局跨回合摘要
+    ltm_recall: list = field(default_factory=list)  # 长期记忆：跨局召回
+    thought: dict = field(default_factory=dict)
+
+
+def _act_str(a: "Action") -> str:
+    if a is None:
+        return "-"
+    tgt = f"#{a.targets[0]}" if a.targets else ""
+    return f"{a.type}{tgt}"
 
 
 class Reasoner(Protocol):
@@ -84,6 +99,14 @@ class HeuristicReasoner:
         return s
 
     def score(self, ctx: GraphContext, action: Action) -> float:
+        base = self._base_score(ctx, action)
+        if base <= -900:  # 绝不刀/票队友：不加抖动，永远垫底
+            return base
+        # 人设风险抖动：激进(risk 高)波动更大 → 不同性格选择更有差异
+        risk = float(getattr(ctx.persona, "risk", 0.4)) if getattr(ctx, "persona", None) else 0.4
+        return base + (ctx.rng.random() - 0.5) * 2 * (risk * 8.0)
+
+    def _base_score(self, ctx: GraphContext, action: Action) -> float:
         me = ctx.seat
         if action.type == "pass":
             return 0.0
@@ -160,8 +183,21 @@ class DecisionGraph:
         if ctx.bonds is not None:
             present = {s.seat_id: s.seat_id for s in ctx.state.alive_seats()}
             ctx.bias = ctx.bonds.to_behavior_bias(me, present)
+        # 中期记忆（本局态势） + 长期记忆（跨局召回）
+        if ctx.session_id:
+            try:
+                from app.memory.mtm import MediumTermMemory
+                ctx.mtm = MediumTermMemory(ctx.session_id, ctx.character_id).summary(ctx.state, ctx.seat)
+            except Exception:
+                ctx.mtm = ""
+        if ctx.ltm_store is not None:
+            try:
+                sit = f"阶段{ctx.state.phase} 谁是狼 谁可疑 谁可信"
+                ctx.ltm_recall = [m.content for m in ctx.ltm_store.recall(sit, top_k=3, character_id=ctx.character_id)]
+            except Exception:
+                ctx.ltm_recall = []
 
-    # ③ 推理：给每个合法行动打分
+    # ③ 推理：给每个合法行动打分（HeuristicReasoner 内部按人设加抖动；LLMReasoner 保持 1/0 选择不被干扰）
     def reason(self, ctx: GraphContext) -> None:
         ctx._scores = [(self.reasoner.score(ctx, a), a) for a in ctx.legal]  # type: ignore[attr-defined]
 
@@ -177,6 +213,20 @@ class DecisionGraph:
         if not ctx.engine._is_legal(ctx.state, chosen):
             chosen = ctx.legal[0]
         ctx.chosen = chosen
+        # 思维轨迹（供调试面板查看每个虚拟用户的"想法"）
+        ctx.thought = {
+            "seat": ctx.seat.seat_id,
+            "persona": getattr(ctx.persona, "name", None),
+            "phase": ctx.state.phase,
+            "role": ctx.seat.role,
+            "legal": [_act_str(a) for a in ctx.legal],
+            "beliefs": {str(k): {"faction": b.suspected_faction, "trust": b.trust}
+                        for k, b in sorted(ctx.beliefs.items())},
+            "mtm": ctx.mtm,
+            "ltm": list(ctx.ltm_recall),
+            "scores": sorted([(round(sc, 1), _act_str(a)) for sc, a in scores], reverse=True)[:6],
+            "chosen": _act_str(chosen),
+        }
         return chosen
 
     # ⑤ 编码：把本回合形成的心证写回（此实例跨回合记忆）
@@ -185,18 +235,27 @@ class DecisionGraph:
 
 
 class HeuristicPolicy:
-    """跑完整决策子图的策略；持有跨回合心证，可选注入羁绊图。"""
+    """跑完整决策子图的策略；持有跨回合心证、人设与三级记忆句柄。"""
 
     def __init__(
         self,
         seed: Optional[int] = None,
         bonds: Optional[BondGraph] = None,
         reasoner: Optional[Reasoner] = None,
+        persona: object = None,
+        session_id: int = 0,
+        character_id: int = 0,
+        ltm: object = None,
     ) -> None:
         self._rng = random.Random(seed)
         self._beliefs: dict = {}
         self._bonds = bonds
         self._graph = DecisionGraph(reasoner)
+        self.persona = persona
+        self.session_id = session_id
+        self.character_id = character_id
+        self._ltm = ltm
+        self.last_thought: dict = {}
 
     def decide(self, engine: GameEngine, state: GameState, seat: Seat) -> Optional[Action]:
         ctx = GraphContext(
@@ -206,8 +265,14 @@ class HeuristicPolicy:
             beliefs=self._beliefs,
             bonds=self._bonds,
             rng=self._rng,
+            persona=self.persona,
+            session_id=self.session_id,
+            character_id=self.character_id or seat.seat_id,
+            ltm_store=self._ltm,
         )
-        return self._graph.run(ctx)
+        action = self._graph.run(ctx)
+        self.last_thought = ctx.thought
+        return action
 
     @property
     def beliefs(self) -> dict:

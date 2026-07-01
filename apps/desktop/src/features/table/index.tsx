@@ -105,7 +105,7 @@ function ActionBar({
 }
 
 export default function TableView(): React.ReactElement {
-  const { game, submit, refresh, leave, loading, error } = useApp();
+  const { game, submit, leave, loading, error, thinking, live, thoughts, debug, toggleDebug } = useApp();
 
   if (!game) {
     return (
@@ -137,7 +137,7 @@ export default function TableView(): React.ReactElement {
           <Chip color="red">{game.phase}</Chip>
           <Chip color="white">存活 {alive}/{game.seats.length}</Chip>
           <Chip color="black">你是 {game.your_role}</Chip>
-          <Button variant="ghost" onClick={refresh} disabled={loading}>刷新</Button>
+          <Button variant={debug ? "blue" : "ghost"} onClick={toggleDebug}>调试</Button>
           <Button variant="ghost" onClick={leave}>离开</Button>
         </div>
       </div>
@@ -147,6 +147,55 @@ export default function TableView(): React.ReactElement {
           <div className={game.winner === "werewolf" ? "bg-red" : "bg-blue"} style={{ padding: 20, display: "flex", alignItems: "center", gap: 16 }}>
             <Shape kind="circle" size={32} color="yellow" />
             <h2 className="fg-white">对局结束 · 胜者：{game.winner}</h2>
+          </div>
+        </Panel>
+      )}
+
+      {(thinking !== null || live) && (
+        <Panel flat>
+          <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 12, minHeight: 28 }}>
+            {live ? (
+              <>
+                <Chip color="blue">#{live.seat} {live.persona}</Chip>
+                <span style={{ fontSize: "0.95rem" }}>{live.text}<span style={{ opacity: 0.5 }}>▍</span></span>
+              </>
+            ) : (
+              <>
+                <Shape kind="circle" size={14} color="yellow" />
+                <span className="bh-mono-label">#{thinking} 正在思考…</span>
+              </>
+            )}
+          </div>
+        </Panel>
+      )}
+
+      {debug && (
+        <Panel corner>
+          <div className="bg-black" style={{ padding: "12px 20px" }}><h3 className="fg-white">调试 · 每个虚拟用户的思维</h3></div>
+          <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
+            {game.seats.map((s) => {
+              const t = (thoughts as any)[String(s.seat)] as any;
+              const p = game.personas?.[String(s.seat)];
+              return (
+                <div key={s.seat} style={{ border: "3px solid var(--bh-black)", padding: 10, background: s.alive ? "var(--bh-white)" : "var(--bh-paper-2)" }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <Chip color="black">#{s.seat}</Chip>
+                    <strong>{p?.name || s.name}</strong>
+                    {p?.traits?.slice(0, 2).map((tr: string) => <Chip key={tr} color="white">{tr}</Chip>)}
+                  </div>
+                  {t ? (
+                    <div style={{ fontSize: "0.75rem", marginTop: 6, lineHeight: 1.5 }}>
+                      <div>选择：<strong>{t.chosen}</strong>（{t.phase}）</div>
+                      {t.scores && <div style={{ opacity: 0.8 }}>打分：{t.scores.map((x: any) => `${x[1]}=${x[0]}`).join("， ")}</div>}
+                      {t.mtm && <div style={{ opacity: 0.7 }}>中期：{String(t.mtm).slice(0, 60)}</div>}
+                      {t.ltm && t.ltm.length ? <div style={{ opacity: 0.7 }}>长期：{t.ltm.join("；").slice(0, 60)}</div> : null}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "0.75rem", marginTop: 6, opacity: 0.5 }}>（尚无决策）</div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Panel>
       )}

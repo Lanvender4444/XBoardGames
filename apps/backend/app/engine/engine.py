@@ -342,7 +342,8 @@ class GameEngine:
             top = max(tally.values())
             leaders = sorted(t for t, c in tally.items() if c == top)
             # 平票不再固定取最小席位（否则人类#0 几乎每晚被刀）；用本局种子做确定性随机
-            rng = random.Random((state.seed or 0, "night_kill", state.round, len(state.log)))
+            # 用字符串种子（tuple 种子在 Python 3.11+ 会报错），确定性且跨版本安全
+            rng = random.Random(f"{state.seed or 0}-night_kill-{state.round}-{len(state.log)}")
             victims.add(rng.choice(leaders))
         return victims
 

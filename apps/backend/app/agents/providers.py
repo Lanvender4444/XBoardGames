@@ -48,9 +48,16 @@ _runtime: dict = {"provider": "offline"}
 
 
 def set_runtime_config(config: dict) -> dict:
-    """设置当前对局使用的 LLM 配置（不持久化 api_key 到磁盘）。返回脱敏后的配置。"""
+    """设置当前对局使用的 LLM 配置（不持久化 api_key 到磁盘）。返回脱敏后的配置。
+
+    若传入的 api_key 为空或是脱敏值（``***…``），保留已存的真实 key——避免前端回填掩码后覆盖掉真钥匙。
+    """
     global _runtime
-    _runtime = dict(config or {"provider": "offline"})
+    new = dict(config or {"provider": "offline"})
+    key = (new.get("api_key") or "").strip()
+    if not key or key.startswith("***"):
+        new["api_key"] = _runtime.get("api_key", "")
+    _runtime = new
     return public_config()
 
 
@@ -82,7 +89,9 @@ def build_chat_model(config: Optional[dict] = None) -> BaseChatModel:
     cfg = config if config is not None else get_runtime_config()
     provider = (cfg.get("provider") or "offline").lower()
     preset = PRESETS.get(provider, PRESETS["custom"])
-    api_key = cfg.get("api_key") or ""
+    api_key = (cfg.get("api_key") or "").strip()
+    if not api_key or api_key.startswith("***"):
+        api_key = (get_runtime_config().get("api_key") or "").strip()  # 用已存真实 key，绝不把掩码发给厂商
     base_url = cfg.get("base_url") or preset.get("base_url") or ""
     model = cfg.get("model") or preset.get("model") or "gpt-4o-mini"
     temperature = float(cfg.get("temperature", 0.7))

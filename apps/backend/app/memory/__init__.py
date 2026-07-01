@@ -12,11 +12,13 @@ from app.memory.consolidation import ConsolidationResult, consolidate_session
 from app.memory.embedding import Embedder, HashingEmbedder, get_embedder
 from app.memory.highlights import Highlight, HighlightEvaluator
 from app.memory.ltm import LongTermMemoryStore, Memory
+from app.memory.mtm import MediumTermMemory
 from app.memory.stm import Belief, ShortTermMemory
 
 __all__ = [
     "ShortTermMemory",
     "Belief",
+    "MediumTermMemory",
     "LongTermMemoryStore",
     "Memory",
     "BondGraph",

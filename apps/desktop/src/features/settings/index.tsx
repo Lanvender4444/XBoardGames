@@ -9,7 +9,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 export default function SettingsView(): React.ReactElement {
-  const { providers, llm, backend, loadProviders, setLLMField, saveLLM, setBackend, loading, error } = useApp();
+  const { providers, llm, backend, loadProviders, setLLMField, saveLLM, setBackend, loading, error, testInfo, testBackend, testLLM } = useApp();
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
@@ -113,6 +113,15 @@ export default function SettingsView(): React.ReactElement {
             <p style={{ margin: 0 }}>
               <span className="bh-mono-label">提示</span>：先在此保存模型配置，再去大厅创建对局，AI 即用该模型。
             </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Button variant="ghost" onClick={testBackend}>测试后端连接</Button>
+              <Button variant="blue" onClick={testLLM}>测试模型连接</Button>
+            </div>
+            {testInfo && (
+              <div style={{ border: "3px solid var(--bh-black)", padding: 12, background: "var(--bh-paper-2)", fontSize: "0.85rem" }}>
+                {testInfo}
+              </div>
+            )}
           </div>
         </Panel>
       </div>

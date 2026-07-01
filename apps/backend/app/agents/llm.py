@@ -90,16 +90,18 @@ def get_chat_model(model: Optional[BaseChatModel] = None) -> BaseChatModel:
 # 决策链 + Reasoner
 # --------------------------------------------------------------------------- #
 _SYSTEM = (
-    "你是社交推理桌游里的一名 AI 玩家：{persona}。"
+    "你是社交推理桌游狼人杀里的一名 AI 玩家。{persona_hint} "
     "你只能从给定候选行动里选择一个，目标是为自己的阵营取得胜利。"
-    "综合你的身份、对其他玩家的心证、与他人的羁绊来判断。只回复你选择的候选编号（一个整数），不要解释。"
+    "综合你的身份、对他人的心证、羁绊、以及你的短/中/长期记忆来判断。"
+    "只回复你选择的候选编号（一个整数），不要解释。"
 )
 _HUMAN = (
     "阶段：{phase}　回合：{round}\n"
     "你的身份：席位#{seat} {role}/{faction}\n"
-    "心证（对他人的判断）：{beliefs}\n"
+    "短期记忆·心证（对他人的即时判断）：{beliefs}\n"
     "羁绊偏置：{bias}\n"
-    "召回的相关记忆：{memories}\n"
+    "中期记忆·本局态势：{mtm}\n"
+    "长期记忆·跨局印象：{ltm}\n"
     "候选行动：\n{candidates}\n"
     "请只回复最佳候选的编号。"
 )
@@ -115,11 +117,11 @@ class LLMReasoner:
     def __init__(
         self,
         model: Optional[BaseChatModel] = None,
-        persona: str = "理性、谨慎、以阵营胜利为目标",
+        persona: Any = None,
         ltm: Any = None,
     ) -> None:
         self.model = get_chat_model(model)
-        self.persona = persona
+        self.persona = persona  # 兼容旧签名；实际人设从 ctx.persona 读取
         self.ltm = ltm
         self._heur = HeuristicReasoner()  # 提供候选特征/提示分 + 兜底
         prompt = ChatPromptTemplate.from_messages([("system", _SYSTEM), ("human", _HUMAN)])
@@ -144,13 +146,10 @@ class LLMReasoner:
             hint = self._heur.score(ctx, a)
             tgt = f" 目标#{a.targets[0]}" if a.targets else ""
             cand_lines.append(f"[{i}] {a.type}{tgt} | 提示分 {round(hint, 1)}")
-        memories = ""
-        if self.ltm is not None:
-            mem = self.ltm.recall(f"阶段 {ctx.state.phase} 谁可疑", top_k=3,
-                                  character_id=ctx.seat.seat_id)
-            memories = "；".join(m.content for m in mem) or "无"
+        persona_hint = ctx.persona.system_hint() if getattr(ctx, "persona", None) else "性格：理性、谨慎。"
+        ltm_txt = "；".join(ctx.ltm_recall) if getattr(ctx, "ltm_recall", None) else "无"
         out = self.chain.invoke({
-            "persona": self.persona,
+            "persona_hint": persona_hint,
             "phase": ctx.state.phase,
             "round": ctx.state.round,
             "seat": ctx.seat.seat_id,
@@ -158,7 +157,8 @@ class LLMReasoner:
             "faction": ctx.seat.faction,
             "beliefs": _fmt_beliefs(ctx),
             "bias": ctx.bias or "无",
-            "memories": memories or "无",
+            "mtm": ctx.mtm or "无",
+            "ltm": ltm_txt,
             "candidates": "\n".join(cand_lines),
         })
         idx = _first_int(out)
@@ -197,17 +197,25 @@ class LLMPolicy:
         model: Optional[BaseChatModel] = None,
         seed: Optional[int] = None,
         bonds: Any = None,
-        persona: str = "理性、谨慎、以阵营胜利为目标",
+        persona: Any = None,
+        session_id: int = 0,
+        character_id: int = 0,
         ltm: Any = None,
         use_langgraph: bool = True,
     ) -> None:
         import random
 
-        self._reasoner = LLMReasoner(model=model, persona=persona, ltm=ltm)
+        self._model = get_chat_model(model)
+        self._reasoner = LLMReasoner(model=self._model, persona=persona, ltm=ltm)
         self._rng = random.Random(seed)
         self._beliefs: dict = {}
         self._bonds = bonds
+        self.persona = persona
+        self.session_id = session_id
+        self.character_id = character_id
+        self._ltm = ltm
         self.last_trace: list = []
+        self.last_thought: dict = {}
 
         self._app = None
         self._graph = None
@@ -220,45 +228,68 @@ class LLMPolicy:
 
             self._graph = DecisionGraph(self._reasoner)
 
-    def decide(self, engine, state, seat) -> Optional[Action]:
-        ctx = GraphContext(
+    def _ctx(self, engine, state, seat) -> GraphContext:
+        return GraphContext(
             engine=engine, state=state, seat=seat,
             beliefs=self._beliefs, bonds=self._bonds, rng=self._rng,
+            persona=self.persona, session_id=self.session_id,
+            character_id=self.character_id or seat.seat_id, ltm_store=self._ltm,
         )
+
+    def decide(self, engine, state, seat) -> Optional[Action]:
+        ctx = self._ctx(engine, state, seat)
         if self._app is not None:
             out = self._app.invoke({"ctx": ctx, "trace": []})
             self.last_trace = out["trace"]
         else:
             self._graph.run(ctx)
+        self.last_thought = ctx.thought
         return ctx.chosen
 
     def speak(self, engine, state, seat) -> str:
-        """讨论阶段发言：用 LLM 依据共享状态 + 自身身份/心证生成一句话。
-
-        离线内置模型不擅长自由文本 → 抛出让编排器回退模板；接真实 LLM 时返回自然语言发言。
-        """
-        from app.agents.llm import LocalHeuristicChatModel as _Local
-        if isinstance(self._reasoner.model, _Local):
+        """讨论发言：真实 LLM 依据**人设 + 三级记忆**生成一句话。离线模型抛出让编排器回退模板。"""
+        if isinstance(self._model, LocalHeuristicChatModel):
             raise RuntimeError("offline model: fall back to template")
-        alive = [s.seat_id for s in state.alive_seats()]
+        prompt = self._speak_prompt(state, seat)
+        text = (self._model | _str_parser()).invoke(prompt)
+        return str(text).strip().splitlines()[0][:140]
+
+    def stream_speak(self, engine, state, seat):
+        """流式发言：逐 token 产出（真实 LLM 用 model.stream；离线回退为分块吐模板）。"""
+        if isinstance(self._model, LocalHeuristicChatModel):
+            from app.agents.orchestrator import _template_speech
+            text = _template_speech(self, state, seat.seat_id)
+            for i in range(0, len(text), 4):
+                yield text[i:i + 4]
+            return
+        prompt = self._speak_prompt(state, seat)
+        for chunk in self._model.stream(prompt):
+            piece = getattr(chunk, "content", "") or ""
+            if piece:
+                yield piece
+
+    def _speak_prompt(self, state, seat):
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from app.memory.mtm import MediumTermMemory
+        persona_hint = self.persona.system_hint() if self.persona else "性格：理性、谨慎。"
         beliefs = "，".join(
             f"#{k}:{getattr(v,'suspected_faction', None) or '?'}(信任{getattr(v,'trust',0)})"
             for k, v in sorted(self._beliefs.items())
         ) or "暂无"
-        prompt = self._speak_prompt(seat, state, alive, beliefs)
-        text = (self._reasoner.model | _str_parser()).invoke(prompt)
-        return str(text).strip().splitlines()[0][:120]
-
-    @staticmethod
-    def _speak_prompt(seat, state, alive, beliefs):
-        from langchain_core.messages import HumanMessage, SystemMessage
+        mtm = ""
+        if self.session_id:
+            try:
+                mtm = MediumTermMemory(self.session_id, self.character_id or seat.seat_id).summary(state, seat)
+            except Exception:
+                mtm = ""
+        alive = [s.seat_id for s in state.alive_seats()]
         sys = (
-            "你是社交推理游戏狼人杀里的一名玩家。现在是白天讨论，请用**一句中文**发言："
-            "可以表达怀疑、辩护、带节奏，但不要直接报出自己的真实身份/底牌。简洁、有信息量。"
+            f"你是狼人杀里的一名玩家。{persona_hint} 现在是白天讨论，用**一句中文**发言，"
+            "务必体现你的性格与说话习惯；可表达怀疑、辩护、带节奏，但不要直接报出真实身份/底牌。"
         )
         human = (
-            f"你的席位 #{seat.seat_id}（身份保密）。第 {state.round} 回合，存活席位：{alive}。"
-            f"你的心证：{beliefs}。只输出你的发言内容，不要加引号或前缀。"
+            f"你的席位 #{seat.seat_id}（身份保密）。第 {state.round} 回合，存活：{alive}。\n"
+            f"你的心证：{beliefs}。\n本局态势：{mtm or '无'}。\n只输出发言内容，不要引号或前缀。"
         )
         return [SystemMessage(content=sys), HumanMessage(content=human)]
 

@@ -45,7 +45,7 @@ ai-tabletop/
 # 终端 A —— 后端（提供对局 API + LLM 配置）
 cd apps/backend
 uv sync --extra api --extra ai          # api=FastAPI/WS；ai=真实大模型(OpenAI兼容/Anthropic)
-uv run uvicorn "app.api.app:create_app" --factory --host 0.0.0.0 --port 8000
+uv run serve                            # 启动后端 → http://localhost:8000（前端默认连它）
 
 # 终端 B —— 前端
 cd apps/desktop
@@ -54,11 +54,20 @@ npm install && npm run dev              # 打开 http://localhost:5173
 
 在网页里：
 
-1. **设置**页配置 AI 大脑：选 Provider（OpenAI / DeepSeek / Kimi / 智谱GLM / 通义 / OpenRouter / Groq /
-   Together / Mistral / 本地 Ollama·LM Studio·vLLM / Anthropic / 自定义），填 Base URL（预设会自动填）、模型、API Key，
-   保存。**不配也能玩**——默认内置离线模型，无需 Key。
+1. **设置**页：先点「**测试后端连接**」确认能连上后端；再选 Provider（OpenAI / DeepSeek / Kimi / 智谱GLM /
+   通义 / OpenRouter / Groq / Together / Mistral / 本地 Ollama·LM Studio·vLLM / Anthropic / 自定义），填 Base URL
+   （预设会自动填）、模型、API Key，保存，点「**测试模型连接**」验证能调通。**不配也能玩**——默认内置离线模型，无需 Key。
 2. **大厅**选人数（你=席位#0，其余 AI）→「开始对局」。
 3. **牌桌**轮到你时点行动按钮（查验/投票/发言…），AI 由 LangGraph + LLM 决策链自动行动。
+
+### 连不上 API？按顺序排查
+
+- **前端连不上后端**（页面报“无法连接后端…”）：确认终端 A 的 `uv run serve` 正在运行且没报错；
+  确认端口是 8000（设置页“后端地址”默认 `http://localhost:8000`）；`uvicorn 未安装` → 先 `uv sync --extra api`。
+- **模型连不上**（点“测试模型连接”报错）：错误会**原样显示**（鉴权 401=Key 错、404/连接超时=Base URL 错或本地服务没开）。
+  用 OpenAI 兼容端点时 Base URL 记得带 `/v1`；本地 Ollama 用 `http://localhost:11434/v1` 且先 `ollama serve`。
+- **测试模型显示 `LocalHeuristicChatModel`**：说明当前在用内置离线模型（Provider 选了 offline，或需要 Key 的 Provider 没填 Key）。
+- Windows 上 `uv run serve` 起不来时，可改用 `uv run python -m app.api.serve`。
 
 > “支持所有主流模型”靠 **OpenAI 兼容协议**（base_url + key + model）实现，覆盖绝大多数开/闭源厂商与本地推理服务；
 > Anthropic 走原生适配。后端地址也可在设置页改（默认 `http://localhost:8000`）。
